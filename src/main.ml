@@ -5,7 +5,9 @@ let make_inputs =
   List.map E.of_list
 
 let () =
-  (* let prog = Seq (Par (
+  let p = Parser.parse_file "await.ministrel" in
+  print_endline (Format.asprintf "%a\n" pp_prog p);
+  (* (* let prog = Seq (Par (
     Seq (await "A", Emit "OK_A"), Seq (await "B", Emit "OK_B")
   ), Emit "C") in
   let inputs = make_inputs [
@@ -35,4 +37,4 @@ let () =
       )
     )
   in
-  simulate inputs prog
+  simulate inputs prog *)
