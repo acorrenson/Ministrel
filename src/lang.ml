@@ -39,8 +39,16 @@ let halt =
 
 let await s =
   let ok = gen "_await_done" in
-  Trap (ok,
-    Loop (Seq (Pause, Ite (s, Exit (ok, 2), Nothing)))
+  Seq (Pause,
+    Trap (
+      ok,
+      Loop (
+        Seq (
+          Ite (s, Exit (ok, 2), Nothing),
+          Pause
+        )
+      )
+    )
   )
 
 let await_imm_not s =
