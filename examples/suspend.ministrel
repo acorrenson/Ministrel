@@ -1,0 +1,5 @@
+suspend
+  loop
+    emit A; pause
+  end
+when S

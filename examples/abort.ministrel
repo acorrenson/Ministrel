@@ -1,0 +1,5 @@
+abort
+  emit A;
+  pause;
+  emit B
+when R
