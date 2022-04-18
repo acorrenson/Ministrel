@@ -14,11 +14,11 @@ type prog =
   (* Emitting signals *)
   | Emit of string
   (* Preemption *)
-  | Abort of string * prog
+  | Suspend of string * prog
   (* Traps *)
   | Trap of string * prog
   (* Throw "exception" *)
-  | Exit of string
+  | Exit of string * int
 
 
 type process =
@@ -28,21 +28,55 @@ type process =
   ; program : prog
   }
 
+let _count = ref 0
+
+let gen s =
+  incr _count;
+  Printf.sprintf "%s_%d" s !_count
+
 let halt =
   Loop Pause
 
-let abort_imm s p =
-  Ite (s, Nothing, Abort(s, p))
-
 let await s =
-  Abort (s, halt)
+  let ok = gen "_await_done" in
+  Trap (ok,
+    Loop (Seq (Pause, Ite (s, Exit (ok, 2), Nothing)))
+  )
+
+let await_imm_not s =
+  let ok = gen "_await_imm_done" in
+  Trap (
+    ok,
+    Loop (
+      Seq (
+        Ite (s, Nothing, Exit (ok, 2)),
+        Pause
+      )
+    )
+  )
+
+let suspend_imm s p =
+  Seq (await_imm_not s, Suspend (s, p))
+
+let abort s p =
+  let ok = gen "_abort_done" in
+  Trap (ok,
+    Par (
+      Seq (Suspend (s, p), Exit (ok, 2)),
+      Seq (await s, Exit (ok, 2))
+    )
+  )
+
+
+let abort_imm s p =
+  Ite (s, Nothing, abort s p)
 
 let await_imm s =
   abort_imm s halt
 
 let trap_handle t p q =
   let ok = "_trap_done" in
-  Trap (ok, Seq (Trap (t, Seq (p, Exit ok)), q))
+  Trap (ok, Seq (Trap (t, Seq (p, Exit (ok, 2))), q))
 
 let pp_prog fmt p =
   let id lvl = String.make lvl ' ' in
@@ -52,7 +86,7 @@ let pp_prog fmt p =
     | Nothing ->
       Format.fprintf fmt "%snothing" (id lvl)
     | Par (x, y) ->
-      Format.fprintf fmt "%s{%a%s\n} || {\n%a%s\n}"
+      Format.fprintf fmt "%s{\n%a\n%s} || {\n%a\n%s}"
       (id lvl)
       (pp_prog_aux (lvl + 2)) x
       (id lvl)
@@ -77,19 +111,19 @@ let pp_prog fmt p =
       (id lvl)
     | Emit s ->
       Format.fprintf fmt "%semit %s" (id lvl) s
-    | Abort (s, p) ->
-      Format.fprintf fmt "%sabort\n%a\n%swhen %s"
+    | Suspend (s, p) ->
+      Format.fprintf fmt "%ssuspend\n%a\n%swhen %s"
       (id lvl)
       (pp_prog_aux (lvl + 2)) p
       (id lvl)
       s
     | Trap (s, p) ->
-      Format.fprintf fmt "%strap %s\n%a\n%s"
+      Format.fprintf fmt "%strap %s\n%a\n%send"
       (id lvl)
       s
       (pp_prog_aux (lvl + 2)) p
       (id lvl)
-    | Exit s ->
-      Format.fprintf fmt "%sexit %s" (id lvl) s
+    | Exit (s, k) ->
+      Format.fprintf fmt "%sexit %s[%d]" (id lvl) s k
     in
     pp_prog_aux 0 fmt p
