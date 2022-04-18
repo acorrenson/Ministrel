@@ -1,0 +1,3 @@
+(executable
+ (name simulator)
+ (libraries ministrel))

@@ -1,5 +1,6 @@
 open Genlex
 open Lang
+open Simulator
 
 let lexer =
   make_lexer [
@@ -15,6 +16,7 @@ let lexer =
     "emit";
     "trap";
     "pause";
+    "halt";
     "nothing";
     "suspend";
     "immediate";
@@ -62,7 +64,6 @@ and parse_atom s =
     Some (Emit signal)
   | Kwd "await" ->
     let* signal = parse_ident s in
-    let* _ = parse_end s in
     Some (await signal)
   | Kwd "loop" ->
     let* body = parse_seq s None in
@@ -127,7 +128,7 @@ and parse_in s =
   | _ -> None
 and parse_close s =
   match Stream.peek s with
-  | Some (Kwd "}") -> 
+  | Some (Kwd "}") ->
     Stream.junk s;
     Some ()
   | _ -> None
@@ -140,3 +141,13 @@ let parse_file file =
   |> lexer
   |> parser
   |> Option.get
+
+let parse_inputs file =
+  let chan = open_in file in
+  let inputs = ref [] in
+  try while true do
+    let line = input_line chan in
+    let symbols = Str.split (Str.regexp " +") line in
+    inputs := (E.of_list symbols)::!inputs
+  done; assert false
+  with _ -> List.rev !inputs
