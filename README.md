@@ -64,12 +64,99 @@ For example, an environment for our system ABRO could be the sequence `{} {} {A 
 The key idea in Esterel, is that basic actions take **no time** to execute. For example, the program `emit A; emit B` is going to emit `A` and `B` within the first unit of time (resulting in the sequence `{A B} ...`). This sounds counterintuitive and unrealistic, but modeling systems as if actions are executed in no time is actually what makes Esterel so elegant. However, there is one exception: the instruction `pause` is the only instruction that takes 1 unit of time to execute. The `pause` instruction can therefore be used to synchronise programs and to control which subprograms are executed at the same time or not. For example, the program `loop { emit A; pause } end` gives the output `{A} {A} ...`.
 However, the program `loop { emit A } end` is forbidden because the loop body takes no time to execute. Executing such a program would lead to the production of infinitely many output signals within 0 unit of time.
 
+Reactive programs are not expected to terminate: they should run continuously. Therefore, a program that is *done computing* is simply a program that is not reacting to input signals. This behavior can be obtained 
+by looping while doing nothing:
+
+```
+loop
+  nothing
+end
+```
+
+However, as explained above, basic actions take no time to execute. 
+The instruction `nothing` is no exception and therefore, such a loop would be ill-formed (remember that the body of a loop must take at list 1 unit of time to execute). To model the idea of *doing nothing during 1 unit of time*, we introduce an instruction `pause`. From pause we can derive an instruction `halt` causing the program to idle, continuously ignoring the inputs:
+
+```
+halt = loop
+  pause
+end
+```
 
 ## Syntax
 
-### Base Instructions
+So far, we discussed a complete example and we talked about time in reactive programs. Let's be a little more formal and introduce the syntax of the language **Ministrel**.
 
-In the following, `S` represents a signal, `T` a trap, `p` and `q` are programs.
+To keep the implementation as concise as possible, we introduce very few primitives in our language. However, these primitives are powerful enough to derive more expressive instructions. For convenience, **Ministrel** features supports derived instructions (but they are unfolded to their definition internally).
+
+### Basic Instructions
+
+#### `nothing` and `pause`
+
+The instruction `nothing` does nothing in 0 unit of time. The instruction `pause` does nothing but takes 1 unit of time.
+
+#### Emitting signals
+
+To emit a signal `S`, one can use the instruction `emit S`. Note that this instruction, as any instruction (except for `pause`) takes no time to execute.
+
+#### Testing for signals
+
+The main interest of reactive programs is, well..., to react to signals ^^'. To react to an input signal `S`, one can use an `if then else` structure.
+
+```
+if S then
+  p
+else
+  q
+end
+```
+
+This test if the input signal `S` is currently present. If so, `p` is executed, otherwise `q` is executed. Easy right?
+
+### Preemption
+
+One of the most important feature that makes Esterel so expressive is it's ability to not only detect and emit signals but also to suspend the execution of a sub-program in reaction to the environment. In computer science, this is referred to as *preemption*. 
+
+**Ministrel** provides 2 primitives for preemption: `suspend` and `trap`.
+
+#### Suspending a program
+
+The `suspend` primitive allows to freeze the execution of a program `p` each time a signal `S` is present. The program is resumed as soon as `S` is no longer detected. The syntax is as follows:
+
+```
+suspend
+  p
+when S
+```
+
+Note that `suspend` does not take effect immediately but only starting from the next time unit.
+
+For example, let's consider the following program:
+
+```
+suspend
+  loop
+    emit A; pause
+  end
+when S
+```
+
+Let's consider the following sequence of input signals: `{S} { } {S} { } ...`. `S` is present at time 0 but `suspend` ignores signals that are present when it starts executing. Therefore, `A` is still emitted at time 0. Then, since `S` is no longer present at time 1, `A` is again emitted. However, at time 2, `S` is detected and therefore the program is suspended until time 3. The sequence of outputs will look like `{A} {A} { } {A} ...`.
+
+#### Traps
+
+Another powerful mechanism to control the execution of programs in reaction to signals is traps. Traps are similar to exceptions in Java or OCaml. Traps are emitted by the instruction `exit` and handled by the instruction `trap`:
+
+```
+trap T
+  ...
+  exit T
+  ...
+end
+```
+
+When `exit T` is executed, the handled program is interrupted. Note that the program is not interrupted immediately but at the next time unit. This is called *weak preemption*.
+
+### Table des instructions
 
 | Base Instructions        | Description                                             |
 | :----------------------- | :------------------------------------------------------ |
@@ -81,12 +168,8 @@ In the following, `S` represents a signal, `T` a trap, `p` and `q` are programs.
 | `exit T k`               | Trigger the `k`-th outermost trap                       |
 | `if S then p else q end` | Test the signal `S` and executes `p` or `q` accordingly |
 | `p ; q`                  | Execute `p` and then `q`                                |
-| `p || q`                 | (Synchronous) Parallel composition of `p` and `q`       |
+| `p                       |                                                         | q` | (Synchronous) Parallel composition of `p` and `q` |
 | `suspend p when S`       | Suspend the execution of `p` if `S` is present          |
-
-#### More about traps and suspend
-
-TODO
 
 ### Derived Instructions
 
